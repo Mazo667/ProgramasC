@@ -1,0 +1,3 @@
+<h1>SERVIDOR CONCURRENTE CON REUTILIZACIÓN DE PUERTO Y EXECV</h1>
+Este servidor TCP utiliza un <i>call system</i> <b>execv()</b> para reemplazar el proceso actual con un nuevo programa. Permite que cada conexión sea manejada por una instancia separada del programa service.
+El uso de <i>setsockopt</i> con <b>SO_REUSEADDR</b> permite que el servidor utilice el mismo puerto inmediatamente después que se cierra, sin tener que esperar a que las conexiones existentes se cierren. 
