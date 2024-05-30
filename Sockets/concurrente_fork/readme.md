@@ -1,0 +1,6 @@
+<h1>SERVIDOR CONCURRENTE CON FORK()</h1>
+
+En este servidor concurrente, los procesos hijos van a atender a los clientes y el padre va a estar escuchando por nuevas conexiones. Cuando haiga una nueva conexión se va a crear un hijo para atender esa conexión.
+<li>La función <i>fork()</i> irá dentro del while hasta que se ejecute <i>accept()</i> una vez ejecutado se crea un proceso hijo y este va a ejecutar nuestra función <i>service()</i> que brinda un servicio de eco.</li>
+<li>La función <i>fork()</i> devuelve 0 cuando es el hijo y -1 cuando falla la creación del proceso hijo.</li>
+<li>Un padre tiene un PID <i>(Process ID)</i> que normalmente es mayor a 0.</li>
