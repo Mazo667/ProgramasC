@@ -19,7 +19,7 @@
      fputs(err_msg,stderr);
       fputc('\n',stderr);
       exit(1);
-  }
+}
 
 static void iband(int socket,char *msg){
     int n;
@@ -39,7 +39,7 @@ int main(void) {
     int s, n, len;
     struct sockaddr_in server_addr;
     char msj[MSJMAX];
-    char answer;
+    char answer = 'y';
 
     s = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -51,7 +51,6 @@ int main(void) {
         perror("Error al conectar con el servidor\n");
         exit(EXIT_FAILURE);
     }
-    answer = 'y';
     while (answer == 'y' || answer == 'Y'){
         printf("Ingrese el mensaje que quiere enviar: \n");
         scanf("%s",msj);
