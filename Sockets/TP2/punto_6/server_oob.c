@@ -3,20 +3,26 @@
 #include <unistd.h>
 #include <string.h>
 #include <sys/socket.h>
-
+#include <fcntl.h>
+#include <errno.h>
 #include <signal.h>
 #include <netinet/in.h>
-#include <fcntl.h>
+
 
 #define BUFF_SIZE 1024
 #define PORT 9000
 
 int sock_serv, sock_client;
 
+// Check if file descriptor is valid
+int isValidFd(int fd) {
+    return fcntl(fd, F_GETFD) != -1 || errno != EBADF; // EBADF: Bad file descriptor
+}
+
 static void sig_urg(int sig){
     int str_len; 
     char buffer[BUFF_SIZE];
-    str_len = recv(sock_client, buffer, sizeof(buffer), MSG_OOB);
+    str_len = recv(sock_client, buffer, sizeof(buffer), MSG_OOB); // Recibe datos fuera de banda
     buffer[str_len] = '\0';
     printf("Mensaje URGENTE: %s (%d) \n", buffer, str_len);
 }
@@ -43,15 +49,23 @@ int main(){
     addr_serv.sin_addr.s_addr = htonl(INADDR_ANY);
     addr_serv.sin_port = htons(PORT);
 
-    if(-1 == bind(sock_serv, (struct sockaddr*)&addr_serv, sizeof(addr_serv))) error_handling("Error bind()");
-
-    if(-1 == listen(sock_serv, 5)) error_handling("Error listen()");
+    if (bind(sock_serv, (struct sockaddr*)&addr_serv, sizeof(addr_serv)) == -1) {
+        error_handling("Error bind()");
+    }
+    
+    if (listen(sock_serv, 5) == -1) {
+        error_handling("Error listen()");
+    }
 
     sz_addr_serv = sizeof(addr_serv);
     sock_client = accept(sock_serv, (struct sockaddr*)&addr_serv, &sz_addr_serv);
 
-    //Cambie el propietario del socket (F_SETOWN) al que apunta el descriptor de archivo sock_client al proceso cuyo ID es el valor de retorno de getpid()
-    fcntl(sock_client, F_SETOWN, getpid());
+    
+    if (isValidFd(sock_client)) {
+        fcntl(sock_client, F_SETOWN, getpid());
+    } else {
+        error_handling("Error fcntl()");
+    }
     
     signal(SIGURG, sig_urg);
 

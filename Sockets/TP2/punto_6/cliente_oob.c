@@ -39,6 +39,7 @@ int main(void) {
     int s, n, len;
     struct sockaddr_in server_addr;
     char msj[MSJMAX];
+    char obbmsj[MSJMAX];
     char answer = 'y';
 
     s = socket(AF_INET, SOCK_STREAM, 0);
@@ -57,9 +58,9 @@ int main(void) {
         iband(s, msj);
         memset(msj, 0, MSJMAX);
 
-        printf("Ingrese el mensaje fuera de banda que quiere enviar: \n");
-        scanf("%s",msj);
-        oband(s, msj);
+        printf("Ingrese el caracter fuera de banda que quiere enviar: \n");
+        scanf("%s",obbmsj);
+        oband(s, obbmsj);
         memset(msj, 0, MSJMAX);
 
         printf("Desea enviar otro mensaje? (y/n)\n");
