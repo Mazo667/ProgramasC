@@ -10,38 +10,42 @@
 
 #include "MessagePacket.h"
 
-#define PORT 12345
-
 #define MULTICAST_PORT 5432
 #define MULTICAST_GROUP "224.0.0.1"
 
 #define MSGLEN 1024
 
 int sock, sock_send; // Descriptor de socket
+struct sockaddr_in multicastAddr; // Estructura de direcciones de multidifusión
 
-// Estructura de direcciones de multidifusión
-struct sockaddr_in multicastAddr;
+/* VARIABLES PARA EL GRUPO MULTICAST */
+unsigned char mcastTTL; // TTL de multidifusión
+char *mcastIP; // Dirección IP de multidifusión 
+unsigned int mcastPort; // Puerto de multidifusión
 
-unsigned char mcastTTL; 
+/* VARIABLES PARA EL SERVIDOR */
+unsigned short servPort; // Puerto del servidor
+char* servIP; // IP del servidor
+struct sockaddr_in servAddr; // Estructura de direcciones del servidor
 
 // Estructura para la configuración del manejador de señales
 struct sigaction sigAction; // Signal handler
 
-// Gestion de miembros del grupo
-char members[100][100]; // List of members
-int is_connect[100]; // List of connection status
-int id = 0; // ID of the server
+/* VARIABLES PARA LOS MIEMBROS DEL GRUPO MULTICAST */
+char members[100][100]; // Listado de miembros del grupo
+int is_connect[100]; // Listado de miembros conectados
+int id = 0; // ID del miembro
 
 char groupInfoMsg[MSGLEN]; // Mensaje de información del grupo
 
-// Para información de miembros del grupo
+/* INFORMACION DE MIEMBROS DE LOS GRUPOS */
 char groupMemberStrRow[MSGLEN]; // Fila de la tabla de miembros
 char groupMemberStr[MSGLEN * 100]; // Tabla de miembros
 
-// Manejador de señales cuando ocurre SIGIO
+/* MANEJADOR DE SEÑALES CUANDO OCURRE SIGIO */
 void IOSignalHandler(int signo);
 
-// Función de generación de paquetes
+/* FUNCION PARA EMPAQUETAR UN MENSAJE */
 int Packetize(short msgID, char *msgBuf, short msgLen, char *pktBuf, int pktBufSize){
   if(msgLen > MSGLEN - 4){
     return -1;
@@ -54,7 +58,7 @@ int Packetize(short msgID, char *msgBuf, short msgLen, char *pktBuf, int pktBufS
   return msgLen + 4;
 }
 
-// Función de desempaquetado de paquetes
+/* FUNCION PARA DESEMPAQUETAR */
 int Depacketize(char *pktBuf, int pktLen, short *msgID, char *msgBuf, short msgBufSize){
   if(msgBufSize != MSGLEN){
     return -1;
@@ -67,7 +71,7 @@ int Depacketize(char *pktBuf, int pktLen, short *msgID, char *msgBuf, short msgB
   return msgBufSize;
 }
 
-// Procesamiento de salida de grupo
+/* FUNCION PARA PROCESAR LA SALIDA DEL GRUPO */
 int leave_member(char *targetUserName){
   int i;
   for(i = 0; i <= 99; i++){
@@ -81,15 +85,23 @@ int leave_member(char *targetUserName){
   return -1;
 }
 
-int main(){
-    struct sockaddr_in servAddr; // Dirección del servidor
-    
+int main(int argc, char * argv[]) {
+
+    // Comprobar los argumentos
+    if (argc != 5) {
+        fprintf(stderr, "Usage: %s<Listen IP> <Listen Port> <Group IP> <Group Port>\n", argv[0]);
+        exit(1);
+    }
+
     // Inicialización de la tabla de miembros
     int i;
     for (i = 0; i <= 99; i++){
         is_connect[i] = 0;
         strcpy(members[i], "");
     }
+
+    servIP = argv[1];
+    servPort = atoi(argv[2]);
 
     // Creación de un socket
     if((sock = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0){
@@ -99,16 +111,20 @@ int main(){
 
     memset(&servAddr, 0, sizeof(servAddr));
     servAddr.sin_family = AF_INET;
-    servAddr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    servAddr.sin_port = htons(PORT);
+    servAddr.sin_addr.s_addr = inet_addr(servIP);
+    servAddr.sin_port = htons(servPort);
+
     
     if(bind(sock, (struct sockaddr *) &servAddr, sizeof(servAddr)) < 0){
         perror("bind() failed");
         exit(1);
     }
 
+    mcastIP = argv[3];
+    mcastPort = atoi(argv[4]);
     mcastTTL = 1; // TTL de multidifusión
 
+    // Cree un socket para usar para enviar mensajes.
     sock_send = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (setsockopt(sock_send, IPPROTO_IP, IP_MULTICAST_TTL, (void*)&mcastTTL, sizeof(mcastTTL)) < 0) {
         fprintf(stderr, "setsockopt() failed\n");
@@ -118,8 +134,8 @@ int main(){
     // Configuración de la estructura de direcciones de multidifusión
     memset(&multicastAddr, 0, sizeof(multicastAddr));
     multicastAddr.sin_family = AF_INET;
-    multicastAddr.sin_addr.s_addr = inet_addr(MULTICAST_GROUP); 
-    multicastAddr.sin_port = htons(MULTICAST_PORT);
+    multicastAddr.sin_addr.s_addr = inet_addr(mcastIP); 
+    multicastAddr.sin_port = htons(mcastPort);
 
     // Establecer controlador de señal
     sigAction.sa_handler = IOSignalHandler;
@@ -151,8 +167,9 @@ int main(){
         exit(1);
     }
 
-    printf("Servidor iniciado, en dirección %s y puerto %d\n", inet_ntoa(servAddr.sin_addr), ntohs(servAddr.sin_port));
-
+    printf("[server] Servidor iniciado, en dirección %s y puerto %d\n", inet_ntoa(servAddr.sin_addr), ntohs(servAddr.sin_port));
+    printf("[server] Grupo de multidifusión en %s:%d\n", mcastIP, mcastPort);
+    
     // Bucle infinito
     for(;;){
         sleep(1);
@@ -191,7 +208,7 @@ void IOSignalHandler(int signo){
 
             // Solicitud de participación en grupo
             if(msgID == MSG_ID_JOIN_REQUEST){
-                printf("Solicitud de participación en grupo recibida, de %s, ID asignado %d\n", msgBuffer, id);
+                printf("[server] Solicitud de participación en grupo recibida, de %s, ID asignado %d\n", msgBuffer, id);
                 // Responder con un mensaje de información del grupo
                 strcpy(members[id], msgBuffer);
                 // Conectar
@@ -204,7 +221,7 @@ void IOSignalHandler(int signo){
 
             // Solicitud de información de grupo
             else if(msgID == MSG_ID_GROUP_INFO_REQUEST){
-                printf("Solicitud de información de grupo recibida de %s\n", msgBuffer);
+                printf("[server] Solicitud de información de grupo recibida de %s\n", msgBuffer);
 
                 // Construir una tabla de miembros del grupo
                 snprintf(groupInfoMsg, MSGLEN, "%s:%d\n", MULTICAST_GROUP, MULTICAST_PORT);
@@ -217,11 +234,11 @@ void IOSignalHandler(int signo){
 
 
             else if(msgID == MSG_ID_USER_LIST_REQUEST){
-                printf("Solicitud de lista de usuarios recibida de %s\n", msgBuffer);
+                printf("[server] Solicitud de lista de usuarios recibida de %s\n", msgBuffer);
 
                 snprintf(groupMemberStr, MSGLEN*100, "\n\n[*] Solicitud del miembro %s%s\n","", msgBuffer);
 
-                snprintf(groupMemberStr, MSGLEN*100,"%s%s\n",groupMemberStr,"-----Miembros del grupo-----\n");
+                snprintf(groupMemberStr, MSGLEN*100,"%s%s\n",groupMemberStr,"---Miembros del grupo---\n");
 
                 for(int i = 0;i < id; i++){
                     if(is_connect[i]){
@@ -238,13 +255,13 @@ void IOSignalHandler(int signo){
 
             // Solicitud de salida del grupo
             else if(msgID == MSG_ID_LEAVE_REQUEST){
-                printf("Solicitud de salida del grupo recibida de %s\n", msgBuffer);
+                printf("[server] Solicitud de salida del grupo recibida de %s\n", msgBuffer);
 
                 if(leave_member(msgBuffer) == 0){
                     pktLen = Packetize(MSG_ID_LEAVE_RESPONSE, msgBuffer, strlen(msgBuffer), pktBuffer, sizeof(pktBuffer));
                     sendMsjLen = sendto(sock_send, pktBuffer, pktLen, 0,(struct sockaddr*)&multicastAddr, sizeof(multicastAddr));
                 } else {
-                    printf("Solicitud de salida del grupo rechazada. ERROR!\n");
+                    printf("[server] Solicitud de salida del grupo rechazada. ERROR!\n");
                     return;
                 }
             }
